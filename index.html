@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8"><title>Jurnalis Mengaji</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f6f3ec;--card:#fff;--ink:#1d2b24;--mut:#6b766f;--pri:#1f6b4f;--pri2:#e6f2ec;--line:#e2ddd0;--red:#b3402f;--amb:#b7791f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a16;--card:#1b2620;--ink:#eaf1ec;--mut:#94a39a;--pri:#4cb58a;--pri2:#21352c;--line:#2b3a32;--red:#e2705e;--amb:#e0a84a}}
+:root[data-theme="dark"]{--bg:#121a16;--card:#1b2620;--ink:#eaf1ec;--mut:#94a39a;--pri:#4cb58a;--pri2:#21352c;--line:#2b3a32;--red:#e2705e;--amb:#e0a84a}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 18px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;flex-wrap:wrap}
+header b{font-size:17px;color:var(--pri)}.brand{display:flex;flex-direction:column;line-height:1.25}.brand small{font-size:11px;color:var(--mut)}header nav{display:flex;gap:6px;flex:1;flex-wrap:wrap}
+main{max-width:980px;margin:0 auto;padding:18px}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 13px;border-radius:8px;cursor:pointer}
+button.p{background:var(--pri);border-color:var(--pri);color:#fff}button.d{color:var(--red)}button.on{background:var(--pri2);border-color:var(--pri)}
+button:disabled{opacity:.5;cursor:not-allowed}
+input,select,textarea{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+label{display:block;margin:10px 0 3px;color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.Live{background:#fde4df;color:var(--red)}.Akan{background:#fbefd5;color:var(--amb)}.Selesai{background:var(--pri2);color:var(--pri)}
+.mut{color:var(--mut);font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%}td,th{padding:7px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:14px;white-space:nowrap}
+.auth{max-width:380px;margin:40px auto}
+.room{display:grid;gap:14px;grid-template-columns:1fr 290px}@media(max-width:760px){.room{grid-template-columns:1fr}}
+video{width:100%;background:#0c120f;border-radius:12px;aspect-ratio:16/9;object-fit:contain}
+#chat{height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--bg)}
+.rec{color:var(--red);font-weight:700}
+h2{margin:4px 0 14px}h3{margin:0 0 6px}
+</style></head><body>
+<div id="app"></div>
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {getFirestore,collection,doc,addDoc,setDoc,updateDoc,deleteDoc,onSnapshot,query,where} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import {firebaseConfig} from './firebase-config.js';
+const fb=initializeApp(firebaseConfig),auth=getAuth(fb),db=getFirestore(fb);
+const C=p=>collection(db,p),D=p=>doc(db,...p.split('/')),add=(c,d)=>addDoc(C(c),d),upd=(p,d)=>updateDoc(D(p),d);
+const $=s=>document.querySelector(s),esc=t=>String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let me={id:null,role:'jamaah'},S={members:{},kajian:[],att:[]},V={v:'list',id:null},W=null,U=[],regMode=false;
+const nm=id=>S.members[id]?.nama||'Anggota',kj=id=>S.kajian.find(k=>k.id===id);
+const stat=k=>k.status==='live'?'Live':k.status==='done'?'Selesai':'Akan';
+const stTxt=k=>({Live:'Sedang Berlangsung',Akan:'Akan Datang',Selesai:'Selesai'}[stat(k)]);
+const fmt=t=>new Date(t).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+const canManage=k=>me.role==='admin'||(me.role==='ustadz'&&k.ustadz===me.id);
+const toDT=t=>new Date(t-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16);
+const okUrl=u=>/^https?:\/\/\S+$/i.test(u);
+const go=(v,id)=>{V.v=v;V.id=id||null;render()};
+const msg=t=>{$('#app').innerHTML=`<div class="auth card"><h2>🕌 Jurnalis Mengaji</h2><p class="mut">${t}</p></div>`};
+function authV(){$('#app').innerHTML=`<div class="auth card"><h2 style="margin-bottom:0">🕌 Jurnalis Mengaji</h2><div class="mut" style="font-size:12px;margin-bottom:10px">Didukung oleh Pesantren Mahasiswa Al Hikam Tangerang Selatan</div><p class="mut">${regMode?'Daftar sebagai jamaah':'Masuk ke akun Anda'}</p>${regMode?'<label>Nama</label><input id="n">':''}<label>Email</label><input id="e" type="email"><label>Kata sandi</label><input id="p" type="password"><p id="err" class="mut" style="color:var(--red)"></p><div class="row"><button class="p" onclick="${regMode?'reg()':'login()'}">${regMode?'Daftar':'Masuk'}</button><button onclick="toggleReg()">${regMode?'Sudah punya akun':'Daftar baru'}</button></div></div>`}
+const toggleReg=()=>{regMode=!regMode;authV()};
+const errT=e=>({'auth/invalid-credential':'Email atau sandi salah.','auth/email-already-in-use':'Email sudah terdaftar.','auth/weak-password':'Sandi minimal 6 karakter.','auth/invalid-email':'Format email tidak valid.'}[e.code]||'Gagal: '+e.code);
+async function login(){try{await signInWithEmailAndPassword(auth,$('#e').value.trim(),$('#p').value)}catch(e){$('#err').textContent=errT(e)}}
+async function reg(){const n=$('#n').value.trim();if(!n)return $('#err').textContent='Nama wajib diisi.';
+ try{const c=await createUserWithEmailAndPassword(auth,$('#e').value.trim(),$('#p').value);await setDoc(D('users/'+c.user.uid),{nama:n,email:c.user.email,role:'jamaah'})}catch(e){$('#err').textContent=errT(e)}}
+const logout=()=>signOut(auth);
+onAuthStateChanged(auth,u=>{U.forEach(f=>f());U=[];W?.un();W=null;S={members:{},kajian:[],att:[]};
+ if(!u){me.id=null;return authV()}
+ me.id=u.uid;V={v:'list',id:null};msg('Memuat…');
+ U.push(onSnapshot(C('users'),q=>{S.members={};q.docs.forEach(d=>S.members[d.id]=d.data());me.role=S.members[me.id]?.role||'jamaah';refresh()}));
+ U.push(onSnapshot(C('kajian'),q=>{S.kajian=q.docs.map(d=>({id:d.id,...d.data()}));refresh()}))});
+function refresh(){if(!me.id||!S.members[me.id]||V.v==='form')return;render()}
+function render(){
+ if(!me.id||!S.members[me.id])return;
+ if(V.v==='detail')watch(V.id);
+ const nav=`<header><div class="brand"><b>🕌 Jurnalis Mengaji</b><small>Didukung oleh Pesantren Mahasiswa Al Hikam Tangerang Selatan</small></div><nav><button onclick="go('list')">Daftar Kajian</button>${me.role==='admin'?`<button onclick="go('users')">Pengguna</button>`:''}</nav><span class="mut">${esc(nm(me.id))} · ${me.role}</span><button onclick="logout()">Keluar</button></header>`;
+ $('#app').innerHTML=nav+'<main>'+({list:listV,detail:detailV,users:usersV,form:formV}[V.v])()+'</main>';
+}
+function listV(){
+ const top=me.role!=='jamaah'?`<button class="p" onclick="go('form')">+ Buat Kajian</button>`:'';
+ const ks=[...S.kajian].sort((a,b)=>a.waktu-b.waktu);
+ return `<div class="row" style="justify-content:space-between"><h2>Daftar Kajian</h2>${top}</div><div class="grid">${ks.map(k=>`<div class="card"><span class="tag ${stat(k)}">${stTxt(k)}</span><h3 style="margin-top:8px">${esc(k.judul)}</h3><div class="mut">${esc(nm(k.ustadz))} · ${fmt(k.waktu)}</div><p>${esc(k.desk)}</p><button class="p" onclick="go('detail','${k.id}')">Buka</button></div>`).join('')||'<p class="mut">Belum ada kajian.</p>'}</div>`}
+function formV(){const k=kj(V.id)||{};const us=Object.keys(S.members).filter(i=>['ustadz','admin'].includes(S.members[i].role));
+ return `<h2>${k.id?'Edit':'Buat'} Kajian</h2><div class="card" style="max-width:520px"><label>Judul</label><input id="fj" value="${esc(k.judul)}"><label>Ustadz/Ustadzah</label><select id="fu" ${me.role==='ustadz'?'disabled':''}>${us.map(i=>`<option value="${i}" ${((k.ustadz||me.id)===i)?'selected':''}>${esc(nm(i))}</option>`).join('')}</select><label>Jadwal</label><input id="fw" type="datetime-local" value="${toDT(k.waktu||Date.now()+36e5)}"><label>Tautan Zoom (sertakan passcode di tautan)</label><input id="fz" placeholder="https://zoom.us/j/..." value="${esc(k.zoom)}"><label>Tautan rekaman (opsional; YouTube/Drive/Zoom)</label><input id="fr" placeholder="https://..." value="${esc(k.rekaman)}"><label>Deskripsi</label><textarea id="fd" rows="3">${esc(k.desk)}</textarea><p></p><div class="row"><button class="p" onclick="saveK('${k.id||''}')">Simpan</button><button onclick="go('list')">Batal</button></div></div>`}
+async function saveK(id){const j=$('#fj').value.trim(),z=$('#fz').value.trim(),r=$('#fr').value.trim();
+ if(!j)return alert('Judul wajib diisi.');if(z&&!okUrl(z)||r&&!okUrl(r))return alert('Tautan harus diawali https://');
+ const d={judul:j,ustadz:me.role==='ustadz'?me.id:$('#fu').value,waktu:new Date($('#fw').value).getTime()||Date.now(),desk:$('#fd').value,zoom:z,rekaman:r};
+ try{if(id)await upd('kajian/'+id,d);else await add('kajian',{...d,status:'scheduled',materi:[]});go('list')}catch(e){alert('Gagal menyimpan: '+e.code)}}
+function watch(id){if(W?.k===id)return;W?.un();const k=kj(id),all=k&&canManage(k);
+ const q=all?query(C('att'),where('k','==',id)):query(C('att'),where('k','==',id),where('u','==',me.id));
+ W={k:id,un:onSnapshot(q,s=>{S.att=s.docs.map(d=>({id:d.id,...d.data()}));if(V.v==='detail')render()})}}
+function detailV(){const k=kj(V.id);if(!k)return'<p class="mut">Memuat…</p>';const m=canManage(k);
+ const at=S.att.filter(a=>a.k===k.id).sort((a,b)=>a.in-b.in),mine=at.some(a=>a.u===me.id);
+ let act='';
+ if(m){act+=stat(k)==='Akan'?`<button class="p" onclick="setSt('${k.id}','live')">▶ Mulai Kajian</button>`:stat(k)==='Live'?`<button class="d" onclick="setSt('${k.id}','done')">⏹ Akhiri Kajian</button>`:`<button onclick="setSt('${k.id}','scheduled')">↺ Buka lagi</button>`;
+  act+=`<button onclick="go('form','${k.id}')">Edit</button><button class="d" onclick="delK('${k.id}')">Hapus</button>`}
+ if(stat(k)==='Live')act=(k.zoom?`<button class="p" onclick="joinZ('${k.id}')">🎥 Masuk Zoom</button>`:'<span class="mut">Tautan Zoom belum diisi.</span>')+act;
+ else if(!m&&stat(k)==='Akan')act='<span class="mut">Kajian belum dimulai.</span>';
+ const mt=k.materi||[];
+ const mat=mt.length?mt.map((x,i)=>`<div class="row"><span>📄 ${esc(x.nama)}</span><a class="btn" href="${esc(x.url)}" target="_blank" rel="noopener">Buka</a>${m?`<button class="d" onclick="delMat('${k.id}',${i})">Hapus</button>`:''}</div>`).join(''):'<p class="mut">Belum ada materi.</p>';
+ const rows=at.map(a=>`<tr><td>${esc(nm(a.u))}</td><td>${fmt(a.in)}</td><td>Hadir</td></tr>`).join('');
+ return `<button onclick="go('list')">← Kembali</button><div class="card" style="margin-top:12px"><span class="tag ${stat(k)}">${stTxt(k)}</span><h2 style="margin-top:8px">${esc(k.judul)}</h2><div class="mut">${esc(nm(k.ustadz))} · ${fmt(k.waktu)}</div><p>${esc(k.desk)}</p><div class="row">${act}</div></div>
+ <div class="card"><h3>Rekaman</h3>${k.rekaman?`<a class="btn" href="${esc(k.rekaman)}" target="_blank" rel="noopener">▶ Buka rekaman</a>`:`<p class="mut">${stat(k)==='Selesai'?'Belum ada rekaman.':'Tersedia setelah kajian selesai.'}</p>`}</div>
+ <div class="card"><h3>Materi</h3>${stat(k)==='Selesai'||m?mat:'<p class="mut">Materi tersedia setelah kajian selesai.</p>'}${m?`<p></p><div class="row"><input id="mn" placeholder="Nama materi" style="max-width:200px"><input id="mu" placeholder="https://… (Drive/Dropbox)" style="max-width:260px"><button onclick="addMat('${k.id}')">Tambah</button></div>`:''}</div>
+ ${m?`<div class="card"><h3>Absensi (${at.length} hadir)</h3><div class="tbl"><table><tr><th>Nama</th><th>Waktu klik Masuk Zoom</th><th>Status</th></tr>${rows||'<tr><td colspan=3 class="mut">Belum ada data.</td></tr>'}</table></div></div>`:(mine?'<div class="mut">✅ Kehadiran Anda sudah tercatat.</div>':'')}`}
+const setSt=(id,s)=>upd('kajian/'+id,{status:s}).catch(e=>alert('Gagal: '+e.code));
+async function delK(id){if(!confirm('Hapus kajian ini?'))return;await deleteDoc(D('kajian/'+id));go('list')}
+function joinZ(id){const k=kj(id);window.open(k.zoom,'_blank','noopener');if(!S.att.some(a=>a.u===me.id&&a.k===id))add('att',{k:id,u:me.id,in:Date.now()}).catch(()=>{})}
+async function addMat(id){const n=$('#mn').value.trim(),u=$('#mu').value.trim();if(!n||!okUrl(u))return alert('Isi nama dan tautan (diawali https://).');await upd('kajian/'+id,{materi:[...(kj(id).materi||[]),{nama:n,url:u}]})}
+async function delMat(id,i){const m=[...kj(id).materi];m.splice(i,1);await upd('kajian/'+id,{materi:m})}
+function usersV(){return `<h2>Kelola Pengguna</h2><div class="card tbl"><table><tr><th>Nama</th><th>Email</th><th>Peran</th></tr>${Object.keys(S.members).map(i=>`<tr><td>${esc(nm(i))}</td><td>${esc(S.members[i].email)}</td><td><select onchange="setRole('${i}',this.value)" style="width:auto" ${i===me.id?'disabled':''}>${['jamaah','ustadz','admin'].map(r=>`<option ${S.members[i].role===r?'selected':''}>${r}</option>`).join('')}</select></td></tr>`).join('')}</table></div>`}
+const setRole=(id,r)=>upd('users/'+id,{role:r});
+Object.assign(window,{go,login,reg,toggleReg,logout,saveK,delK,setSt,joinZ,addMat,delMat,setRole});
+</script></body></html>
